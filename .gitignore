@@ -39,4 +39,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-config/vapi-439608-898043c021c6.json
+./config/vapi-439608-898043c021c6.json
