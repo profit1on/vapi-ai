@@ -29,8 +29,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# env files (can opt-in for commiting if needed)
+# env files (can opt-in for committing if needed)
 .env*
+!.env.example  # Optional: Keep a template of your env variables
 
 # vercel
 .vercel
@@ -39,4 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-./config/vapi-439608-898043c021c6.json
+# Exclude sensitive credentials
+/config/vapi-439608-898043c021c6.json
