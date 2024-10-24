@@ -39,6 +39,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# Exclude sensitive credentials
-/config/vapi-439608-898043c021c6.json
