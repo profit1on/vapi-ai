@@ -7,6 +7,13 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
+        const { numberOfCalls } = req.body; // Get the number of calls from the request body
+
+        // Validate the number of calls
+        if (!numberOfCalls || numberOfCalls <= 0) {
+            return res.status(400).json({ message: 'Please provide a valid number of calls.' });
+        }
+
         try {
             // Step 1: Fetch leads from Google Sheets
             const leads = await getLeads();
@@ -23,7 +30,10 @@ export default async function handler(req, res) {
                 return res.status(400).json({ message: 'No active phone numbers available.' });
             }
 
-            for (const lead of notCalledLeads) {
+            // Make calls to the specified number of leads or until there are no more leads left
+            for (let i = 0; i < Math.min(numberOfCalls, notCalledLeads.length); i++) {
+                const lead = notCalledLeads[i]; // Select the lead based on the current index
+
                 // Select a random active phone number ID
                 const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
                 const phoneNumberId = activePhoneNumbers[randomIndex]; // Get a random active phone number ID
