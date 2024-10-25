@@ -1,5 +1,6 @@
 // pages/api/end-call-report.js
 import Cors from 'cors';
+import { processEndCallReport } from '../../lib/sheets';
 
 // Initialize CORS middleware
 const cors = Cors({
@@ -28,11 +29,11 @@ export default async function handler(req, res) {
         console.log('Received end-call report:', report);
 
         try {
-            // Process the report as needed here
-            // For example, save it to a database or perform any actions
+            // Process the report to update Google Sheets
+            await processEndCallReport(report); // Call the function to update the sheet
 
             // Send a response back to the client
-            res.status(200).json({ message: 'Report received successfully' });
+            res.status(200).json({ message: 'Report received and processed successfully' });
         } catch (error) {
             console.error('Error processing report:', error);
             res.status(500).json({ message: 'Failed to process report' });
