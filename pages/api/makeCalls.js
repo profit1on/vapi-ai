@@ -1,5 +1,5 @@
 // pages/api/makeCalls.js
-import { getLeads, getActivePhoneNumbers, updateLeadStatus } from '../../lib/sheets'; // Import necessary functions
+import { getLeads, getActivePhoneNumbers, updateLeadInfo } from '../../lib/sheets'; // Import necessary functions
 import { makeCall } from '../../lib/vapi';
 
 // Function to create a delay
@@ -19,6 +19,12 @@ export default async function handler(req, res) {
             const activePhoneNumbers = await getActivePhoneNumbers();
 
             for (const lead of notCalledLeads) {
+                // Check if there are active phone numbers to avoid errors
+                if (activePhoneNumbers.length === 0) {
+                    console.error('No active phone numbers available for making calls.');
+                    return res.status(400).json({ message: 'No active phone numbers available.' });
+                }
+
                 // Select a random active phone number ID
                 const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
                 const phoneNumberId = activePhoneNumbers[randomIndex]; // Get a random active phone number ID
@@ -45,12 +51,19 @@ export default async function handler(req, res) {
                 // Log the result for debugging purposes
                 console.log(`Call Result for ${customerData.name}:`, result);
 
-                // Get the phoneCallProviderId from the result
+                // Get the phoneCallProviderId and callId from the result
                 const phoneCallProviderId = result.phoneCallProviderId;
+                const callId = result.id; // Use the ID from the result
 
-                // Update the lead status to "called" in Google Sheets
+                // Check if the result contains the required IDs
+                if (!phoneCallProviderId || !callId) {
+                    console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
+                    continue; // Skip this lead if any ID is missing
+                }
+
+                // Update the lead status and call information in Google Sheets
                 const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
-                await updateLeadStatus(rowIndex, 'called', phoneCallProviderId); // Pass the phoneCallProviderId to the update function
+                await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
 
                 // Introduce a delay of 2 seconds between calls
                 await delay(2000); // Adjust the delay time as needed (in milliseconds)
