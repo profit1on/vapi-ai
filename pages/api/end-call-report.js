@@ -1,6 +1,6 @@
 // pages/api/end-call-report.js
 import Cors from 'cors';
-import { processEndCallReport } from '../../lib/sheets';
+import { processEndCallReport } from '../../lib/sheets'; // Import the function to process the end call report
 
 // Initialize CORS middleware
 const cors = Cors({
