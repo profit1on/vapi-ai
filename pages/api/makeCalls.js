@@ -1,7 +1,7 @@
 // pages/api/makeCalls.js
 import { getLeads, getActivePhoneNumbers, updateLeadInfo } from '../../lib/sheets'; // Import necessary functions
 import { makeCall } from '../../lib/vapi';
-
+import { updateLeadInfo } from '../../lib/sheets'; 
 // Function to create a delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
