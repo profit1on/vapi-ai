@@ -2,7 +2,7 @@
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
-        console.log('Received request body:', req.body); // Log the incoming request body
+        console.log('Testing clientName Received request body:', req.body); // Log the incoming request body
 
         // Send back the received data as a response for verification
         res.status(200).json({
