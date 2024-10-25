@@ -5,6 +5,24 @@ import { makeCall } from '../../lib/vapi';
 // Function to create a delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Function for exponential backoff
+const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await requestFunction();
+        } catch (error) {
+            if (error.response && error.response.data && error.response.data.error && error.response.data.error.reason === 'rateLimitExceeded') {
+                const waitTime = Math.pow(2, i) * 1000; // Exponential backoff
+                console.warn(`Rate limit exceeded. Retrying in ${waitTime}ms...`);
+                await delay(waitTime);
+            } else {
+                throw error; // Rethrow other errors
+            }
+        }
+    }
+    throw new Error('Max retries exceeded.');
+};
+
 export default async function handler(req, res) {
     if (req.method === 'POST') {
         const { numberOfCalls } = req.body; // Get the number of calls from the request body
@@ -55,8 +73,8 @@ export default async function handler(req, res) {
                 };
 
                 try {
-                    // Make the call and store the result
-                    const result = await makeCall(phoneNumberId, customerData, assistantOverrides);
+                    // Make the call with backoff and store the result
+                    const result = await makeRequestWithBackoff(() => makeCall(phoneNumberId, customerData, assistantOverrides));
                     callResults.push(result);
 
                     // Log the result for debugging purposes
