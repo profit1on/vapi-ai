@@ -18,13 +18,12 @@ export default async function handler(req, res) {
             // Step 3: Fetch active phone numbers
             const activePhoneNumbers = await getActivePhoneNumbers();
 
-            for (const lead of notCalledLeads) {
-                // Check if there are active phone numbers to avoid errors
-                if (activePhoneNumbers.length === 0) {
-                    console.error('No active phone numbers available for making calls.');
-                    return res.status(400).json({ message: 'No active phone numbers available.' });
-                }
+            if (activePhoneNumbers.length === 0) {
+                console.error('No active phone numbers available for making calls.');
+                return res.status(400).json({ message: 'No active phone numbers available.' });
+            }
 
+            for (const lead of notCalledLeads) {
                 // Select a random active phone number ID
                 const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
                 const phoneNumberId = activePhoneNumbers[randomIndex]; // Get a random active phone number ID
