@@ -1,12 +1,12 @@
 // pages/api/updateLead.js
-import { updateLeadStatus } from '../../lib/sheets'; // Import the specific function
+import { updateLeadInfo } from '../../lib/sheets'; // Import the specific function
 
 export default async function updateLeadHandler(req, res) {
     if (req.method === 'POST') {
-        const { rowIndex, status } = req.body; // Extract rowIndex and status from the request body
+        const { rowIndex, status, phoneCallProviderId, callId } = req.body; // Extract rowIndex, status, phoneCallProviderId, and callId from the request body
 
         try {
-            await updateLeadStatus(rowIndex, status); // Call the updateLeadStatus function
+            await updateLeadInfo(rowIndex, status, phoneCallProviderId, callId); // Call the updateLeadInfo function
             res.status(200).json({ message: 'Lead status updated successfully' });
         } catch (error) {
             console.error('Error updating lead status:', error);
