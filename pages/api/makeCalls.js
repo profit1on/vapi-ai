@@ -10,7 +10,7 @@ export default async function handler(req, res) {
         const { numberOfCalls } = req.body; // Get the number of calls from the request body
 
         // Validate the number of calls
-        if (!numberOfCalls || numberOfCalls <= 0) {
+        if (!Number.isInteger(numberOfCalls) || numberOfCalls <= 0) {
             return res.status(400).json({ message: 'Please provide a valid number of calls.' });
         }
 
@@ -41,6 +41,7 @@ export default async function handler(req, res) {
                 const customerData = {
                     name: lead[0], // Adjust index as per your data structure
                     number: `+${lead[2]}`, // Assuming lead[2] contains the number without the '+' prefix
+                    extension: lead[6] || "", // If extension is stored in lead[6], adjust accordingly
                 };
 
                 // Prepare the assistant overrides with dynamic variables
@@ -53,26 +54,37 @@ export default async function handler(req, res) {
                     },
                 };
 
-                // Make the call and store the result
-                const result = await makeCall(phoneNumberId, customerData, assistantOverrides);
-                callResults.push(result);
+                try {
+                    // Make the call and store the result
+                    const result = await makeCall(phoneNumberId, customerData, assistantOverrides);
+                    callResults.push(result);
 
-                // Log the result for debugging purposes
-                console.log(`Call Result for ${customerData.name}:`, result);
+                    // Log the result for debugging purposes
+                    console.log(`Call Result for ${customerData.name}:`, result);
 
-                // Get the phoneCallProviderId and callId from the result
-                const phoneCallProviderId = result.phoneCallProviderId;
-                const callId = result.id; // Use the ID from the result
+                    // Get the phoneCallProviderId and callId from the result
+                    const phoneCallProviderId = result.phoneCallProviderId;
+                    const callId = result.id; // Use the ID from the result
 
-                // Check if the result contains the required IDs
-                if (!phoneCallProviderId || !callId) {
-                    console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
-                    continue; // Skip this lead if any ID is missing
+                    // Check if the result contains the required IDs
+                    if (!phoneCallProviderId || !callId) {
+                        console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
+                        continue; // Skip this lead if any ID is missing
+                    }
+
+                    // Update the lead status and call information in Google Sheets
+                    const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
+                    await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
+
+                } catch (error) {
+                    console.error(`Error making call for ${customerData.name}:`, error.message);
+                    // Log the specific error response for further investigation
+                    if (error.response) {
+                        console.error('Error response from VAPI:', error.response.data);
+                    }
+                    // Skip to the next lead if there was an error making the call
+                    continue; // Skip this lead and move to the next
                 }
-
-                // Update the lead status and call information in Google Sheets
-                const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
-                await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
 
                 // Introduce a delay of 2 seconds between calls
                 await delay(2000); // Adjust the delay time as needed (in milliseconds)
