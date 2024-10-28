@@ -1,8 +1,5 @@
 // pages/api/involvementLevel.js
-import { updateCellN } from '../../lib/sheets'; // Import the function to update Google Sheets
-
-let updatesBatch = []; // Array to hold batched updates
-const BATCH_SIZE = 5; // Define the batch size
+import { getLeads, updateCellN } from '../../lib/sheets'; // Import the function to update Google Sheets
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
@@ -37,20 +34,21 @@ export default async function handler(req, res) {
         // Log the argument to update for verification
         console.log(`Updating cell N with argument: ${argumentToUpdate}`);
 
-        // Add the update to the batch
-        updatesBatch.push({ rowIndex: 2, value: argumentToUpdate }); // Adjust rowIndex as necessary
-
         try {
-            // If the batch size reaches the defined threshold, send the updates
-            if (updatesBatch.length >= BATCH_SIZE) {
-                await Promise.all(updatesBatch.map(async (update) => {
-                    await updateCellN(update.rowIndex, update.value);
-                }));
-                updatesBatch = []; // Clear the batch after processing
+            // Fetch leads to find the correct index
+            const leads = await getLeads(); 
+            // Find the index of the lead based on customer number (or any other unique identifier)
+            const rowIndex = leads.findIndex(lead => lead[0] === customer.number); // Assuming customer number is in column A
+
+            if (rowIndex === -1) {
+                return res.status(404).json({ error: 'No matching customer found in the leads.' });
             }
 
+            // Update cell N with the involvement level
+            await updateCellN(rowIndex + 1, argumentToUpdate); // Update with the correct row index (+1 for Google Sheets)
+
             res.status(200).json({
-                message: 'Data received successfully and queued for update.',
+                message: 'Data received successfully and updated in Google Sheets.',
                 updatedArgument: argumentToUpdate
             });
         } catch (error) {
