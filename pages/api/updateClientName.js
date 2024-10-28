@@ -19,11 +19,14 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'No toolCallList data found in the request.' });
         }
 
+        // Log toolCalls to inspect their structure
+        console.log('Tool Calls:', JSON.stringify(toolCallList, null, 2));
+
         // Assuming you want to get the first object in the toolCallList
         const firstToolCall = toolCallList[0];
 
         // Extract the specific argument you need
-        const argumentToUpdate = firstToolCall.clientName || customer.name; // Fallback to customer.name if clientName is undefined
+        const argumentToUpdate = firstToolCall.clientName || customer?.name; // Fallback to customer.name if clientName is undefined
 
         // Ensure argumentToUpdate exists before updating
         if (!argumentToUpdate) {
