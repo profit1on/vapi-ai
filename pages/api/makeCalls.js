@@ -16,6 +16,7 @@ const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
                 console.warn(`Rate limit exceeded. Retrying in ${waitTime}ms...`);
                 await delay(waitTime);
             } else {
+                console.error(`Error during request: ${error.message}`);
                 throw error; // Rethrow other errors
             }
         }
