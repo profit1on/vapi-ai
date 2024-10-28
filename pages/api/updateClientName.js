@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         }
 
         // Log toolCalls to inspect their structure
-        console.log('Tool Calls:', JSON.stringify(toolCallList, null, 2));
+        console.log('Tool Calls Debug:', JSON.stringify(toolCallList, null, 2));
 
         // Assuming you want to get the first object in the toolCallList
         const firstToolCall = toolCallList[0];
