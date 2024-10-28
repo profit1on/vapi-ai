@@ -1,4 +1,4 @@
-// pages/api/involmentLevel.js
+// pages/api/tradingAnywhere.js
 import { updateCellN, getLeads } from '../../lib/sheets'; // Import the function to update Google Sheets
 
 let updatesBatch = []; // Array to hold batched updates
@@ -6,7 +6,7 @@ const BATCH_SIZE = 5; // Define the batch size
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
-        console.log('Testing involmentLevel Received request body:', req.body); // Log the incoming request body
+        console.log('Testing tradingAnywhere Received request body:', req.body); // Log the incoming request body
 
         // Extract relevant information from the request body
         const { message } = req.body;
@@ -41,11 +41,11 @@ export default async function handler(req, res) {
         // Assuming you want to get the first object in the toolCallList
         const firstToolCall = toolCallList[0];
 
-        // Extract involmentLevel from the tool call's function arguments
-        const involmentLevelFromToolCall = firstToolCall.function?.arguments?.involmentLevel;
+        // Extract tradingAnywhere from the tool call's function arguments
+        const tradingAnywhereFromToolCall = firstToolCall.function?.arguments?.tradingAnywhere;
 
-        // Use involmentLevelFromToolCall or fallback to customer.name, or set to empty string if both are undefined
-        const argumentToUpdate = involmentLevelFromToolCall || message.customer?.name || ''; // Set to empty string if not found
+        // Use tradingAnywhereFromToolCall or fallback to customer.name, or set to empty string if both are undefined
+        const argumentToUpdate = tradingAnywhereFromToolCall || message.customer?.name || ''; // Set to empty string if not found
 
         // Log the argument to update for verification
         console.log(`Updating cell N${rowIndex} with argument: ${argumentToUpdate}`);
