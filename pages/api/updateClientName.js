@@ -28,13 +28,8 @@ export default async function handler(req, res) {
         // Extract clientName from the tool call's function arguments
         const clientNameFromToolCall = firstToolCall.function?.arguments?.clientName;
 
-        // Use clientNameFromToolCall or fallback to customer.name
-        const argumentToUpdate = clientNameFromToolCall || customer?.name; // Fallback to customer.name if clientName is undefined
-
-        // Ensure argumentToUpdate exists before updating
-        if (!argumentToUpdate) {
-            return res.status(400).json({ error: 'No argument found to update in Google Sheets.' });
-        }
+        // Use clientNameFromToolCall or fallback to customer.name, or set to empty string if both are undefined
+        const argumentToUpdate = clientNameFromToolCall || customer?.name || ''; // Set to empty string if not found
 
         // Log the argument to update for verification
         console.log(`Updating cell M with argument: ${argumentToUpdate}`);
