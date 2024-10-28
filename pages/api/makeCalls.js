@@ -49,6 +49,8 @@ export default async function handler(req, res) {
                 return res.status(400).json({ message: 'No active phone numbers available.' });
             }
 
+            let totalCallsMade = 0; // Initialize a counter for total calls made
+
             // Make calls to the specified number of leads or until there are no more leads left
             for (let i = 0; i < Math.min(numberOfCalls, notCalledLeads.length); i++) {
                 const lead = notCalledLeads[i]; // Select the lead based on the current index
@@ -80,6 +82,9 @@ export default async function handler(req, res) {
 
                     // Log the result for debugging purposes
                     console.log(`Call Result for ${customerData.name}:`, result);
+
+                    // Increment the total calls made
+                    totalCallsMade++;
 
                     // Get the phoneCallProviderId and callId from the result
                     const phoneCallProviderId = result.phoneCallProviderId;
@@ -114,6 +119,9 @@ export default async function handler(req, res) {
                 // Introduce a delay of 2 seconds between calls
                 await delay(2000); // Adjust the delay time as needed (in milliseconds)
             }
+
+            // Log the total number of calls made
+            console.log(`Total calls made: ${totalCallsMade}`);
 
             res.status(200).json({ message: 'Calls made successfully', results: callResults });
         } catch (error) {
