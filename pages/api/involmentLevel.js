@@ -1,4 +1,4 @@
-// pages/api/involvementLevel.js
+// pages/api/involmentLevel.js
 import { updateCellN, getLeads } from '../../lib/sheets'; // Import the function to update Google Sheets
 
 let updatesBatch = []; // Array to hold batched updates
@@ -6,7 +6,7 @@ const BATCH_SIZE = 5; // Define the batch size
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
-        console.log('Testing involvementLevel Received request body:', req.body); // Log the incoming request body
+        console.log('Testing involmentLevel Received request body:', req.body); // Log the incoming request body
 
         // Extract relevant information from the request body
         const { message } = req.body;
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
         const rowIndex = leads.findIndex(lead => lead[6] === phoneCallProviderId) + 1; // Assuming phoneCallProviderId is in column G
 
         // If rowIndex is -1, that means no match was found
-        if (rowIndex <= 0) {
+        if (rowIndex === 0) {
             console.error(`No matching row found for phoneCallProviderId: ${phoneCallProviderId}`);
             return res.status(404).json({ error: 'No matching phoneCallProviderId found in Google Sheets.' });
         }
@@ -41,11 +41,11 @@ export default async function handler(req, res) {
         // Assuming you want to get the first object in the toolCallList
         const firstToolCall = toolCallList[0];
 
-        // Extract involvement level from the tool call's function arguments
-        const involvementLevelFromToolCall = firstToolCall.function?.arguments?.involvementLevel;
+        // Extract involmentLevel from the tool call's function arguments
+        const involmentLevelFromToolCall = firstToolCall.function?.arguments?.involmentLevel;
 
-        // Use involvementLevelFromToolCall or fallback to customer.name, or set to empty string if both are undefined
-        const argumentToUpdate = involvementLevelFromToolCall || message.customer?.name || ''; // Set to empty string if not found
+        // Use involmentLevelFromToolCall or fallback to customer.name, or set to empty string if both are undefined
+        const argumentToUpdate = involmentLevelFromToolCall || message.customer?.name || ''; // Set to empty string if not found
 
         // Log the argument to update for verification
         console.log(`Updating cell N${rowIndex} with argument: ${argumentToUpdate}`);
