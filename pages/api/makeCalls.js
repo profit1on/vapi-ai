@@ -76,36 +76,49 @@ export default async function handler(req, res) {
                     },
                 };
 
-                try {
-                    // Make the call with backoff and store the result
-                    const result = await makeRequestWithBackoff(() => makeCall(phoneNumberId, customerData, assistantOverrides));
-                    callResults.push(result);
+                let attempt = 0; // Track the number of attempts for the current lead
+                let success = false; // Track if the call was successful
 
-                    // Log the result for debugging purposes
-                    console.log(`Call Result for ${customerData.name}:`, result);
+                while (attempt < 5 && !success) {
+                    attempt++;
 
-                    // Get the phoneCallProviderId and callId from the result
-                    const phoneCallProviderId = result.phoneCallProviderId;
-                    const callId = result.id; // Use the ID from the result
+                    try {
+                        // Make the call with backoff and store the result
+                        const result = await makeRequestWithBackoff(() => makeCall(phoneNumberId, customerData, assistantOverrides));
+                        callResults.push(result);
 
-                    // Check if the result contains the required IDs
-                    if (!phoneCallProviderId || !callId) {
-                        console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
-                        continue; // Skip this lead if any ID is missing
+                        // Log the result for debugging purposes
+                        console.log(`Call Result for ${customerData.name}:`, result);
+
+                        // Get the phoneCallProviderId and callId from the result
+                        const phoneCallProviderId = result.phoneCallProviderId;
+                        const callId = result.id; // Use the ID from the result
+
+                        // Check if the result contains the required IDs
+                        if (!phoneCallProviderId || !callId) {
+                            console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
+                            continue; // Skip this lead if any ID is missing
+                        }
+
+                        // Update the lead status and call information in Google Sheets
+                        const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
+                        await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
+
+                        success = true; // Mark success
+                    } catch (error) {
+                        console.error(`Error making call for ${customerData.name}:`, error.message);
+                        // Log the specific error response for further investigation
+                        if (error.response) {
+                            console.error('Error response from VAPI:', error.response.data);
+                        }
+                        // If it was a rate limit error, wait and retry
+                        if (error.response && error.response.data && error.response.data.error && error.response.data.error.reason === 'rateLimitExceeded') {
+                            console.warn(`Rate limit exceeded for ${customerData.name}. Retrying...`);
+                            await delay(2000); // Short delay before retrying
+                        } else {
+                            break; // Break out of the loop for other errors
+                        }
                     }
-
-                    // Update the lead status and call information in Google Sheets
-                    const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
-                    await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
-
-                } catch (error) {
-                    console.error(`Error making call for ${customerData.name}:`, error.message);
-                    // Log the specific error response for further investigation
-                    if (error.response) {
-                        console.error('Error response from VAPI:', error.response.data);
-                    }
-                    // Skip to the next lead if there was an error making the call
-                    continue; // Skip this lead and move to the next
                 }
 
                 // Introduce a delay of 2 seconds between calls
