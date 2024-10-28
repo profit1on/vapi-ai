@@ -117,7 +117,7 @@ export default async function handler(req, res) {
                 }
 
                 // Introduce a delay of 2 seconds between calls
-                await delay(2000); // Adjust the delay time as needed (in milliseconds)
+                await delay(500); // Adjust the delay time as needed (in milliseconds)
             }
 
             // Log the total number of calls made
