@@ -1,6 +1,9 @@
 // pages/api/updateClientName.js
 import { updateCellM } from '../../lib/sheets'; // Import the function to update Google Sheets
 
+let updatesBatch = []; // Array to hold batched updates
+const BATCH_SIZE = 5; // Define the batch size
+
 export default async function handler(req, res) {
     if (req.method === 'POST') {
         console.log('Testing updateClientName Received request body:', req.body); // Log the incoming request body
@@ -34,20 +37,22 @@ export default async function handler(req, res) {
         // Log the argument to update for verification
         console.log(`Updating cell M with argument: ${argumentToUpdate}`);
 
-        try {
-            // Example: Update cell M with the extracted argument
-            const rowIndex = 2; // Adjust this to the correct row index where you want to update cell M
-            const result = await updateCellM(rowIndex, argumentToUpdate); // Call the function to update cell M
+        // Add the update to the batch
+        updatesBatch.push({ rowIndex: 2, value: argumentToUpdate }); // Adjust rowIndex as necessary
 
-            if (result) {
-                // Send back a success response with the updated data
-                res.status(200).json({
-                    message: 'Data received successfully and Google Sheets updated.',
-                    updatedArgument: argumentToUpdate
-                });
-            } else {
-                res.status(500).json({ error: 'Failed to update Google Sheets.' });
+        try {
+            // If the batch size reaches the defined threshold, send the updates
+            if (updatesBatch.length >= BATCH_SIZE) {
+                await Promise.all(updatesBatch.map(async (update) => {
+                    await updateCellM(update.rowIndex, update.value);
+                }));
+                updatesBatch = []; // Clear the batch after processing
             }
+
+            res.status(200).json({
+                message: 'Data received successfully and queued for update.',
+                updatedArgument: argumentToUpdate
+            });
         } catch (error) {
             console.error('Error updating Google Sheets:', error);
             res.status(500).json({ error: 'Internal server error while updating Google Sheets.' });
