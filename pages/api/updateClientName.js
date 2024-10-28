@@ -12,7 +12,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'No message data found in the request.' });
         }
 
-        const { toolCallList } = message;
+        const { toolCallList, customer } = message; // Include customer for potential extraction
 
         // Check if toolCallList exists and is not empty
         if (!toolCallList || toolCallList.length === 0) {
@@ -22,8 +22,8 @@ export default async function handler(req, res) {
         // Assuming you want to get the first object in the toolCallList
         const firstToolCall = toolCallList[0];
 
-        // Extract the specific argument you need from firstToolCall
-        const argumentToUpdate = firstToolCall.clientName; // Replace with the actual key if needed
+        // Extract the specific argument you need
+        const argumentToUpdate = firstToolCall.clientName || customer.name; // Fallback to customer.name if clientName is undefined
 
         // Ensure argumentToUpdate exists before updating
         if (!argumentToUpdate) {
