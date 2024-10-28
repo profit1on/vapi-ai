@@ -25,8 +25,11 @@ export default async function handler(req, res) {
         // Assuming you want to get the first object in the toolCallList
         const firstToolCall = toolCallList[0];
 
-        // Extract the specific argument you need
-        const argumentToUpdate = firstToolCall.clientName || customer?.name; // Fallback to customer.name if clientName is undefined
+        // Extract clientName from the tool call's function arguments
+        const clientNameFromToolCall = firstToolCall.function?.arguments?.clientName;
+
+        // Use clientNameFromToolCall or fallback to customer.name
+        const argumentToUpdate = clientNameFromToolCall || customer?.name; // Fallback to customer.name if clientName is undefined
 
         // Ensure argumentToUpdate exists before updating
         if (!argumentToUpdate) {
