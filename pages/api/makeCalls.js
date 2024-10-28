@@ -49,8 +49,11 @@ export default async function handler(req, res) {
                 return res.status(400).json({ message: 'No active phone numbers available.' });
             }
 
+            // Calculate the actual number of calls to be made
+            const callsToMake = Math.min(numberOfCalls, notCalledLeads.length);
+
             // Make calls to the specified number of leads or until there are no more leads left
-            for (let i = 0; i < Math.min(numberOfCalls, notCalledLeads.length); i++) {
+            for (let i = 0; i < callsToMake; i++) {
                 const lead = notCalledLeads[i]; // Select the lead based on the current index
 
                 // Select a random active phone number ID
