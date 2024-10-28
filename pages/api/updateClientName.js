@@ -8,53 +8,39 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
         console.log('Testing updateClientName Received request body:', req.body); // Log the incoming request body
 
-        // Extract relevant information from the request body
         const { message } = req.body;
 
         if (!message) {
             return res.status(400).json({ error: 'No message data found in the request.' });
         }
 
-        const { toolCallList, call } = message; // Include call for phoneCallProviderId extraction
+        const { toolCallList, call } = message;
 
-        // Check if toolCallList exists and is not empty
         if (!toolCallList || toolCallList.length === 0) {
             return res.status(400).json({ error: 'No toolCallList data found in the request.' });
         }
 
-        // Log toolCalls to inspect their structure
         console.log('Tool Calls Debug:', JSON.stringify(toolCallList, null, 2));
 
-        // Extract phoneCallProviderId from the call object
         const phoneCallProviderId = call.phoneCallProviderId;
 
-        // Fetch leads to find the correct index based on phoneCallProviderId
-        const leads = await getLeads(); // Fetch leads from Google Sheets
-        const rowIndex = leads.findIndex(lead => lead[6] === phoneCallProviderId) + 1; // Assuming phoneCallProviderId is in column G
+        const leads = await getLeads(); 
+        const rowIndex = leads.findIndex(lead => lead[6] === phoneCallProviderId) + 1;
 
-        // If rowIndex is -1, that means no match was found
         if (rowIndex === 0) {
             console.error(`No matching row found for phoneCallProviderId: ${phoneCallProviderId}`);
             return res.status(404).json({ error: 'No matching phoneCallProviderId found in Google Sheets.' });
         }
 
-        // Assuming you want to get the first object in the toolCallList
-        const firstToolCall = toolCallList[0];
+        const firstToolCall = toolCallList[0]; // Adjust index as necessary
+        const clientNameFromToolCall = firstToolCall.function?.arguments?.clientName || message.customer?.name || '';
+        const argumentToUpdate = clientNameFromToolCall;
 
-        // Extract clientName from the tool call's function arguments
-        const clientNameFromToolCall = firstToolCall.function?.arguments?.clientName;
-
-        // Use clientNameFromToolCall or fallback to customer.name, or set to empty string if both are undefined
-        const argumentToUpdate = clientNameFromToolCall || message.customer?.name || ''; // Set to empty string if not found
-
-        // Log the argument to update for verification
         console.log(`Updating cell M${rowIndex} with argument: ${argumentToUpdate}`);
 
-        // Add the update to the batch
-        updatesBatch.push({ rowIndex, value: argumentToUpdate }); // Update to the correct row index
+        updatesBatch.push({ rowIndex, value: argumentToUpdate });
 
         try {
-            // If the batch size reaches the defined threshold, send the updates
             if (updatesBatch.length >= BATCH_SIZE) {
                 await Promise.all(updatesBatch.map(async (update) => {
                     await updateCellM(update.rowIndex, update.value);
