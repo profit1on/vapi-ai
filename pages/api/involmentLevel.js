@@ -32,8 +32,8 @@ export default async function handler(req, res) {
         const leads = await getLeads(); // Fetch leads from Google Sheets
         const rowIndex = leads.findIndex(lead => lead[6] === phoneCallProviderId) + 1; // Assuming phoneCallProviderId is in column G
 
-        // If rowIndex is 0, that means no match was found
-        if (rowIndex === 0) {
+        // If rowIndex is -1, that means no match was found
+        if (rowIndex <= 0) {
             console.error(`No matching row found for phoneCallProviderId: ${phoneCallProviderId}`);
             return res.status(404).json({ error: 'No matching phoneCallProviderId found in Google Sheets.' });
         }
