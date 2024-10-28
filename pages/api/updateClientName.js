@@ -30,10 +30,10 @@ export default async function handler(req, res) {
 
         // Fetch leads to find the correct index based on phoneCallProviderId
         const leads = await getLeads(); // Fetch leads from Google Sheets
-        const rowIndex = leads.findIndex(lead => lead[6] === phoneCallProviderId) + 1; // Assuming phoneCallProviderId is in column G
+        const rowIndex = leads.findIndex(lead => lead[6] === phoneCallProviderId); // Assuming phoneCallProviderId is in column G
 
         // If rowIndex is -1, that means no match was found
-        if (rowIndex === 0) {
+        if (rowIndex === -1) {
             console.error(`No matching row found for phoneCallProviderId: ${phoneCallProviderId}`);
             return res.status(404).json({ error: 'No matching phoneCallProviderId found in Google Sheets.' });
         }
@@ -48,14 +48,22 @@ export default async function handler(req, res) {
         const argumentToUpdate = clientNameFromToolCall || message.customer?.name || ''; // Set to empty string if not found
 
         // Log the argument to update for verification
-        console.log(`Updating cell M${rowIndex} with argument: ${argumentToUpdate}`);
+        console.log(`Updating cell M${rowIndex + 1} with argument: ${argumentToUpdate}`);
 
         // Add the update to the batch
-        updatesBatch.push({ rowIndex, value: argumentToUpdate }); // Update to the correct row index
+        updatesBatch.push({ rowIndex: rowIndex + 1, value: argumentToUpdate }); // Update to the correct row index
 
         try {
             // If the batch size reaches the defined threshold, send the updates
             if (updatesBatch.length >= BATCH_SIZE) {
+                await Promise.all(updatesBatch.map(async (update) => {
+                    await updateCellM(update.rowIndex, update.value);
+                }));
+                updatesBatch = []; // Clear the batch after processing
+            }
+
+            // Handle remaining updates if any
+            if (updatesBatch.length > 0) {
                 await Promise.all(updatesBatch.map(async (update) => {
                     await updateCellM(update.rowIndex, update.value);
                 }));
