@@ -11,22 +11,21 @@ const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
         try {
             return await requestFunction();
         } catch (error) {
-            if (error.response) {
-                const { error: errorMessage, message } = error.response.data;
-                if (errorMessage === 'rateLimitExceeded') {
+            if (error.response && error.response.data) {
+                if (error.response.data.error === 'rateLimitExceeded') {
                     const waitTime = Math.pow(2, i) * 1000; // Exponential backoff
                     console.warn(`Rate limit exceeded. Retrying in ${waitTime}ms...`);
                     await delay(waitTime);
-                } else if (errorMessage === 'Bad Request' && message.includes('Over Concurrency Limit')) {
+                } else if (error.response.data.error === 'Bad Request' && error.response.data.message.includes('Over Concurrency Limit')) {
                     console.warn('Over Concurrency Limit reached. Waiting for 10 seconds before continuing...');
                     await delay(10000); // Wait for 10 seconds
                 } else {
-                    console.error(`Error during request: ${error.message}`);
-                    throw error; // Rethrow other errors
+                    console.error(`Unhandled error during request: ${error.message}`);
+                    throw error; // Rethrow for non-recoverable errors
                 }
             } else {
                 console.error(`Error during request: ${error.message}`);
-                throw error; // Rethrow other errors
+                throw error; // Rethrow for non-recoverable errors
             }
         }
     }
@@ -125,7 +124,7 @@ export default async function handler(req, res) {
                     continue; // Skip this lead and move to the next
                 }
 
-                // Introduce a delay of 500 milliseconds between calls
+                // Introduce a delay of 2 seconds between calls
                 await delay(500); // Adjust the delay time as needed (in milliseconds)
             }
 
