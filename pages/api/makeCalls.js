@@ -17,7 +17,7 @@ const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
                 await delay(waitTime);
             } else if (error.response && error.response.data.error === 'Bad Request' && error.response.data.message.includes('Over Concurrency Limit')) {
                 console.warn('Over Concurrency Limit reached. Waiting for 10 seconds before continuing...');
-                await delay(10000); // Wait for 10 seconds
+                await delay(1000); // Wait for 10 seconds
             } else {
                 console.error(`Error during request: ${error.message}`);
                 throw error; // Rethrow other errors
