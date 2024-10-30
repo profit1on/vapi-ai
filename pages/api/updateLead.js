@@ -1,13 +1,49 @@
 // pages/api/updateLead.js
-import { updateLeadInfo } from '../../lib/sheets'; // Import the specific function
+import { updateLeadInfo, getLeads } from '../../lib/sheets';
+// import { makeCall } from '../../lib/callService'; // Commented out as callService might be unavailable
+
+// Placeholder makeCall function
+async function makeCall(phoneCallProviderId) {
+    // Mocked response for testing purposes
+    return { phoneCallProviderId, callId: 'exampleCallId' };
+}
 
 export default async function updateLeadHandler(req, res) {
     if (req.method === 'POST') {
-        const { rowIndex, status, phoneCallProviderId, callId } = req.body; // Extract rowIndex, status, phoneCallProviderId, and callId from the request body
-
         try {
-            await updateLeadInfo(rowIndex, status, phoneCallProviderId, callId); // Call the updateLeadInfo function
-            res.status(200).json({ message: 'Lead status updated successfully' });
+            // Fetch all leads
+            const leads = await getLeads();
+
+            // Filter leads with "not-called" status
+            const notCalledLeads = leads.filter(lead => lead[5] === 'not-called'); // Assuming status is in column F (index 5)
+
+            for (const lead of notCalledLeads) {
+                const rowIndex = leads.indexOf(lead) + 1; // Get row index for updating
+                const phoneCallProviderId = lead[6]; // Assuming phoneCallProviderId is in column G
+
+                try {
+                    // Attempt to make the call
+                    const callResult = await makeCall(phoneCallProviderId); // Using the placeholder makeCall function
+
+                    // Check if any valid phoneCallProviderId is returned in callResult
+                    if (callResult && callResult.phoneCallProviderId) {
+                        // Update status to "called" and include the phoneCallProviderId
+                        await updateLeadInfo(rowIndex, 'called', callResult.phoneCallProviderId, callResult.callId);
+                    }
+                } catch (error) {
+                    // Check for "Bad Request" error and update accordingly
+                    if (error.message && error.message.includes('Bad Request')) {
+                        await updateLeadInfo(rowIndex, 'bad-request', phoneCallProviderId, null);
+                        console.log(`Bad Request error for lead at row ${rowIndex}. Continuing to next lead.`);
+                        continue; // Move to the next lead
+                    }
+                    // Log other errors and stop the loop if non-recoverable
+                    console.error(`Error making call for lead at row ${rowIndex}:`, error);
+                    break;
+                }
+            }
+
+            res.status(200).json({ message: 'Lead calling process completed' });
         } catch (error) {
             console.error('Error updating lead status:', error);
             res.status(500).json({ message: 'Failed to update lead status' });
