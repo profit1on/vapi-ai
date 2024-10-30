@@ -1,6 +1,12 @@
 // pages/api/updateLead.js
 import { updateLeadInfo, getLeads } from '../../lib/sheets';
-import { makeCall } from '../../lib/callService'; // Import a hypothetical function to initiate the call
+// import { makeCall } from '../../lib/callService'; // Commented out as callService might be unavailable
+
+// Placeholder makeCall function
+async function makeCall(phoneCallProviderId) {
+    // Mocked response for testing purposes
+    return { phoneCallProviderId, callId: 'exampleCallId' };
+}
 
 export default async function updateLeadHandler(req, res) {
     if (req.method === 'POST') {
@@ -17,7 +23,7 @@ export default async function updateLeadHandler(req, res) {
 
                 try {
                     // Attempt to make the call
-                    const callResult = await makeCall(phoneCallProviderId); // Hypothetical function to initiate call
+                    const callResult = await makeCall(phoneCallProviderId); // Using the placeholder makeCall function
 
                     // Check if any valid phoneCallProviderId is returned in callResult
                     if (callResult && callResult.phoneCallProviderId) {
