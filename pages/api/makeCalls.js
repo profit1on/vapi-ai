@@ -17,7 +17,7 @@ const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
                 await delay(waitTime);
             } else if (error.response && error.response.data.error === 'Bad Request' && error.response.data.message.includes('Over Concurrency Limit')) {
                 console.warn('Over Concurrency Limit reached. Waiting for 10 seconds before continuing...');
-                await delay(1000); // Wait for 10 seconds
+                await delay(10000); // Wait for 10 seconds
             } else {
                 console.error(`Error during request: ${error.message}`);
                 throw error; // Rethrow other errors
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
                             // Handle the "Bad Request" error specifically for invalid phone numbers
                             if (error.response.data.error === 'Bad Request' && error.response.data.message.includes('E.164')) {
                                 const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
-                                await updateLeadInfo(rowIndex, 'Bad Request'); // Update lead with "Bad Request" status
+                                await updateLeadInfo(rowIndex, 'Bad Request', null, null); // Update lead with "Bad Request" status
                             }
                         }
 
@@ -129,7 +129,7 @@ export default async function handler(req, res) {
                 }
 
                 // Introduce a delay of 500ms between calls
-                await delay(100); // Adjust the delay time as needed (in milliseconds)
+                await delay(500); // Adjust the delay time as needed (in milliseconds)
             }
 
             // Log the total number of calls made
