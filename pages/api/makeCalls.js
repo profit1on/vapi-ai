@@ -1,3 +1,4 @@
+// pages/api/makeCalls.js 
 import { getLeads, getActivePhoneNumbers, updateLeadInfo } from '../../lib/sheets'; // Import necessary functions
 import { makeCall } from '../../lib/vapi';
 
@@ -10,13 +11,13 @@ const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
         try {
             return await requestFunction();
         } catch (error) {
-            if (error.response && error.response.data.error === 'rateLimitExceeded') {
-                const waitTime = Math.pow(2, i) * 300; // Exponential backoff
+            if (error.response && error.response.data && error.response.data.error === 'rateLimitExceeded') {
+                const waitTime = Math.pow(2, i) * 1000; // Exponential backoff
                 console.warn(`Rate limit exceeded. Retrying in ${waitTime}ms...`);
                 await delay(waitTime);
             } else if (error.response && error.response.data.error === 'Bad Request' && error.response.data.message.includes('Over Concurrency Limit')) {
                 console.warn('Over Concurrency Limit reached. Waiting for 10 seconds before continuing...');
-                await delay(10000); // Wait for 10 seconds
+                await delay(1000); // Wait for 10 seconds
             } else {
                 console.error(`Error during request: ${error.message}`);
                 throw error; // Rethrow other errors
@@ -26,11 +27,9 @@ const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
     throw new Error('Max retries exceeded.');
 };
 
-const MAX_CONCURRENT_CALLS = 20; // Limit for parallel calls
-
 export default async function handler(req, res) {
     if (req.method === 'POST') {
-        const { numberOfCalls } = req.body;
+        const { numberOfCalls } = req.body; // Get the number of calls from the request body
 
         // Validate the number of calls
         if (!Number.isInteger(numberOfCalls) || numberOfCalls <= 0) {
@@ -38,8 +37,14 @@ export default async function handler(req, res) {
         }
 
         try {
+            // Step 1: Fetch leads from Google Sheets
             const leads = await getLeads();
+
+            // Step 2: Filter leads to only include those with "not-called" status
             const notCalledLeads = leads.filter(lead => lead[5] === 'not-called');
+
+            const callResults = [];
+            // Step 3: Fetch active phone numbers
             const activePhoneNumbers = await getActivePhoneNumbers();
 
             if (activePhoneNumbers.length === 0) {
@@ -47,75 +52,89 @@ export default async function handler(req, res) {
                 return res.status(400).json({ message: 'No active phone numbers available.' });
             }
 
-            const totalCallsToMake = Math.min(numberOfCalls, notCalledLeads.length);
-            const callResults = [];
+            let totalCallsMade = 0; // Initialize a counter for total calls made
 
-            // Helper function to make a single call
-            const makeSingleCall = async (lead, phoneNumberId) => {
+            // Make calls to the specified number of leads or until there are no more leads left
+            for (let i = 0; i < Math.min(numberOfCalls, notCalledLeads.length); i++) {
+                const lead = notCalledLeads[i]; // Select the lead based on the current index
+
+                // Select a random active phone number ID
+                const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
+                const phoneNumberId = activePhoneNumbers[randomIndex]; // Get a random active phone number ID
+
                 const customerData = {
-                    name: lead[0],
-                    number: `+${lead[2]}`,
-                    extension: lead[6] || "",
+                    name: lead[0], // Adjust index as per your data structure
+                    number: `+${lead[2]}`, // Assuming lead[2] contains the number without the '+' prefix
+                    extension: lead[6] || "", // If extension is stored in lead[6], adjust accordingly
                 };
 
+                // Prepare the assistant overrides with dynamic variables
                 const assistantOverrides = {
                     variableValues: {
-                        user_firstname: lead[0],
-                        user_lastname: lead[1],
-                        user_email: lead[3],
-                        user_country: lead[4],
+                        user_firstname: lead[0], // Assuming first name is in lead[0]
+                        user_lastname: lead[1], // Assuming last name is in lead[1]
+                        user_email: lead[3], // Assuming email is in lead[3]
+                        user_country: lead[4], // Assuming country is in lead[4]
                     },
                 };
 
-                const result = await makeRequestWithBackoff(() =>
-                    makeCall(phoneNumberId, customerData, assistantOverrides)
-                );
+                let callSuccessful = false; // Flag to check if call was successful
+                let attempts = 0; // Initialize attempts counter
 
-                const phoneCallProviderId = result.phoneCallProviderId;
-                const callId = result.id;
-
-                if (!phoneCallProviderId || !callId) {
-                    throw new Error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
-                }
-
-                const rowIndex = leads.indexOf(lead) + 1; // 1-based index
-                await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId);
-
-                return result;
-            };
-
-            // Function to manage limited concurrency
-            const parallelCallTasks = [];
-            for (let i = 0; i < totalCallsToMake; i++) {
-                const lead = notCalledLeads[i];
-                const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
-                const phoneNumberId = activePhoneNumbers[randomIndex];
-
-                const task = async () => {
+                while (!callSuccessful && attempts < 3) {
                     try {
-                        const result = await makeSingleCall(lead, phoneNumberId);
+                        // Make the call with backoff and store the result
+                        const result = await makeRequestWithBackoff(() => makeCall(phoneNumberId, customerData, assistantOverrides));
                         callResults.push(result);
-                    } catch (error) {
-                        console.error(`Error calling lead ${lead[0]}: ${error.message}`);
-                        if (error.response?.data?.error === 'Bad Request' && error.response?.data?.message.includes('E.164')) {
-                            const rowIndex = leads.indexOf(lead) + 1;
-                            await updateLeadInfo(rowIndex, 'Bad Request');
+
+                        // Log the result for debugging purposes
+                        console.log(`Call Result for ${customerData.name}:`, result);
+
+                        // Increment the total calls made
+                        totalCallsMade++;
+
+                        // Get the phoneCallProviderId and callId from the result
+                        const phoneCallProviderId = result.phoneCallProviderId;
+                        const callId = result.id; // Use the ID from the result
+
+                        // Check if the result contains the required IDs
+                        if (!phoneCallProviderId || !callId) {
+                            console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
+                            break; // Exit the loop if IDs are missing
                         }
+
+                        // Update the lead status and call information in Google Sheets
+                        const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
+                        await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
+                        callSuccessful = true; // Mark the call as successful
+
+                    } catch (error) {
+                        console.error(`Error making call for ${customerData.name}:`, error.message);
+                        attempts++; // Increment the attempts counter
+
+                        // Log the specific error response for further investigation
+                        if (error.response) {
+                            console.error('Error response from VAPI:', error.response.data);
+
+                            // Handle the "Bad Request" error specifically for invalid phone numbers
+                            if (error.response.data.error === 'Bad Request' && error.response.data.message.includes('E.164')) {
+                                const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
+                                await updateLeadInfo(rowIndex, 'Bad Request'); // Update lead with "Bad Request" status
+                            }
+                        }
+
+                        // Introduce a delay before retrying the call
+                        await delay(2000); // Adjust the delay time as needed (in milliseconds)
                     }
-                };
-
-                parallelCallTasks.push(task());
-
-                // Wait for some tasks to finish if concurrency limit is reached
-                if (parallelCallTasks.length >= MAX_CONCURRENT_CALLS) {
-                    await Promise.all(parallelCallTasks.splice(0, MAX_CONCURRENT_CALLS));
                 }
+
+                // Introduce a delay of 500ms between calls
+                await delay(10); // Adjust the delay time as needed (in milliseconds)
             }
 
-            // Wait for all remaining tasks to complete
-            await Promise.all(parallelCallTasks);
+            // Log the total number of calls made
+            console.log(`Total calls made: ${totalCallsMade}`);
 
-            console.log(`Total calls made: ${callResults.length}`);
             res.status(200).json({ message: 'Calls made successfully', results: callResults });
         } catch (error) {
             console.error('Error making calls:', error);
