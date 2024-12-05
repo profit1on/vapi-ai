@@ -8,6 +8,7 @@ let pendingLeads = [];
 let activePhoneNumbers = [];
 
 // Helper function for delay
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Function to process a lead
