@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         try {
             // Fetch leads and filter for "not-called"
             const leads = await getLeads();
-            const notCalledLeads = leads.filter(lead => lead[5] === 'not-called');
+            const notCalledLeads = leads.filter(lead => lead[3] === 'not-called');
 
             // Fetch active phone numbers
             const activePhoneNumbers = await getActivePhoneNumbers();
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
                 return res.status(400).json({ message: 'No active phone numbers available.' });
             }
 
-            const batches = chunkArray(notCalledLeads.slice(0, numberOfCalls), 5); // Chunk leads into batches of 5
+            const batches = chunkArray(notCalledLeads.slice(0, numberOfCalls), 3); // Chunk leads into batches of 5
 
             for (const batch of batches) {
                 const callResults = await Promise.all(
