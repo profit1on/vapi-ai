@@ -26,7 +26,7 @@ const makeRequestWithBackoff = async (requestFunction, retries = 5) => {
     throw new Error('Max retries exceeded.');
 };
 
-const MAX_CONCURRENT_CALLS = 20; // Limit for parallel calls
+const MAX_CONCURRENT_CALLS = 10; // Limit for parallel calls
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
