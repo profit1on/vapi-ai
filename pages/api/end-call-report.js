@@ -1,5 +1,5 @@
 import Cors from 'cors';
-import { processEndCallReport, getLeads, batchUpdateCells } from '../../lib/sheets';
+import { processEndCallReport, getLeads, getActivePhoneNumbers } from '../../lib/sheets';
 import { makeCall } from '../../lib/vapi';
 
 const cors = Cors({
@@ -16,59 +16,6 @@ function runMiddleware(req, res, fn) {
     });
 }
 
-let activeCalls = 0; // Tracks the number of active calls
-const maxActiveCalls = 20; // Maximum number of simultaneous calls
-
-const initiateNewCall = async () => {
-    const leads = await getLeads();
-    const notCalledLeads = leads.filter((lead) => lead[5] === 'not-called');
-    const activePhoneNumbers = await getActivePhoneNumbers();
-
-    if (notCalledLeads.length > 0 && activeCalls < maxActiveCalls) {
-        const lead = notCalledLeads[0];
-        activeCalls++;
-        const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
-        const phoneNumberId = activePhoneNumbers[randomIndex];
-
-        const customerData = {
-            name: lead[0],
-            number: `+${lead[2]}`,
-            extension: lead[6] || '',
-        };
-
-        const assistantOverrides = {
-            variableValues: {
-                user_firstname: lead[0],
-                user_lastname: lead[1],
-                user_email: lead[3],
-                user_country: lead[4],
-            },
-        };
-
-        try {
-            const result = await makeCall(phoneNumberId, customerData, assistantOverrides);
-            const rowIndex = leads.indexOf(lead) + 1;
-
-            // Update Google Sheets with success
-            await batchUpdateCells([
-                { range: `Lead list!F${rowIndex}`, values: ['called'] },
-                { range: `Lead list!G${rowIndex}`, values: [result.phoneCallProviderId] },
-                { range: `Lead list!H${rowIndex}`, values: [result.id] },
-            ]);
-        } catch (error) {
-            const rowIndex = leads.indexOf(lead) + 1;
-
-            // Update Google Sheets with error
-            await batchUpdateCells([
-                { range: `Lead list!F${rowIndex}`, values: ['error'] },
-                { range: `Lead list!H${rowIndex}`, values: [error.message] },
-            ]);
-        } finally {
-            activeCalls--;
-        }
-    }
-};
-
 export default async function handler(req, res) {
     await runMiddleware(req, res, cors);
 
@@ -78,12 +25,43 @@ export default async function handler(req, res) {
 
             console.log('Received end-call report:', report);
 
+            // Process the end-call report
             await processEndCallReport(report);
 
-            // Start a new call if active calls are below the limit
-            await initiateNewCall();
+            // Fetch new leads and active phone numbers
+            const leads = await getLeads();
+            const notCalledLeads = leads.filter((lead) => lead[5] === 'not-called');
+            const activePhoneNumbers = await getActivePhoneNumbers();
 
-            res.status(200).json({ message: 'Report processed and new call initiated successfully.' });
+            // Initiate a new call if there are leads left
+            if (notCalledLeads.length > 0) {
+                const lead = notCalledLeads[0];
+                const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
+                const phoneNumberId = activePhoneNumbers[randomIndex];
+
+                const customerData = {
+                    name: lead[0],
+                    number: `+${lead[2]}`,
+                    extension: lead[6] || '',
+                };
+
+                const assistantOverrides = {
+                    variableValues: {
+                        user_firstname: lead[0],
+                        user_lastname: lead[1],
+                        user_email: lead[3],
+                        user_country: lead[4],
+                    },
+                };
+
+                try {
+                    await makeCall(phoneNumberId, customerData, assistantOverrides);
+                } catch (error) {
+                    console.error('Error making new call after report:', error);
+                }
+            }
+
+            res.status(200).json({ message: 'Report processed and new call initiated if necessary.' });
         } catch (error) {
             console.error('Error processing report:', error);
             res.status(500).json({ message: 'Failed to process report' });
