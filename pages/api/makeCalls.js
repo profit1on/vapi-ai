@@ -1,105 +1,87 @@
-import { getLeads, getActivePhoneNumbers, batchUpdateCells } from '../../lib/sheets'; // Import necessary functions
+import { getLeads, getActivePhoneNumbers, updateLeadInfo } from '../../lib/sheets'; // Import necessary functions
 import { makeCall } from '../../lib/vapi';
 
-// Helper function to chunk an array into smaller arrays of a given size
-const chunkArray = (array, size) => {
-    const chunks = [];
-    for (let i = 0; i < array.length; i += size) {
-        chunks.push(array.slice(i, i + size));
+// Variables to track state
+let ongoingCalls = 0;
+const maxConcurrentCalls = 20;
+let pendingLeads = [];
+let activePhoneNumbers = [];
+
+// Helper function for delay
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Function to process a lead
+const processLead = async (lead) => {
+    const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
+    const phoneNumberId = activePhoneNumbers[randomIndex];
+
+    const customerData = {
+        name: lead[0],
+        number: `+${lead[2]}`,
+        extension: lead[6] || '',
+    };
+
+    const assistantOverrides = {
+        variableValues: {
+            user_firstname: lead[0],
+            user_lastname: lead[1],
+            user_email: lead[3],
+            user_country: lead[4],
+        },
+    };
+
+    try {
+        const result = await makeCall(phoneNumberId, customerData, assistantOverrides);
+        const phoneCallProviderId = result.phoneCallProviderId;
+        const callId = result.id;
+
+        const rowIndex = pendingLeads.indexOf(lead) + 1;
+        await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId);
+
+        console.log(`Call successful for ${customerData.name}`);
+    } catch (error) {
+        console.error(`Error calling lead ${customerData.name}:`, error.message);
+    } finally {
+        // Reduce the count of ongoing calls and trigger the next one if available
+        ongoingCalls--;
+        triggerNextCall();
     }
-    return chunks;
 };
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Function to trigger the next call
+const triggerNextCall = () => {
+    if (pendingLeads.length > 0 && ongoingCalls < maxConcurrentCalls) {
+        const nextLead = pendingLeads.shift(); // Get the next lead from the queue
+        ongoingCalls++;
+        processLead(nextLead);
+    }
+};
 
+// Main API handler
 export default async function handler(req, res) {
     if (req.method === 'POST') {
-        const { numberOfCalls } = req.body; // Number of calls from the request body
-
-        // Validate the number of calls
-        if (!Number.isInteger(numberOfCalls) || numberOfCalls <= 0) {
-            return res.status(400).json({ message: 'Please provide a valid number of calls.' });
-        }
-
         try {
-            // Fetch leads and filter for "not-called"
+            // Fetch leads and active phone numbers
             const leads = await getLeads();
-            const notCalledLeads = leads.filter(lead => lead[5] === 'not-called');
+            activePhoneNumbers = await getActivePhoneNumbers();
 
-            // Fetch active phone numbers
-            const activePhoneNumbers = await getActivePhoneNumbers();
             if (activePhoneNumbers.length === 0) {
                 return res.status(400).json({ message: 'No active phone numbers available.' });
             }
 
-            const batches = chunkArray(notCalledLeads.slice(0, numberOfCalls), 5); // Chunk leads into batches of 5
+            // Filter leads with "not-called" status
+            pendingLeads = leads.filter((lead) => lead[5] === 'not-called');
 
-            for (const batch of batches) {
-                const callResults = await Promise.all(
-                    batch.map(async (lead) => {
-                        const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
-                        const phoneNumberId = activePhoneNumbers[randomIndex];
+            // Start with 20 concurrent calls
+            const initialCalls = pendingLeads.splice(0, maxConcurrentCalls);
+            ongoingCalls = initialCalls.length;
 
-                        const customerData = {
-                            name: lead[0],
-                            number: `+${lead[2]}`,
-                            extension: lead[6] || "",
-                        };
+            initialCalls.forEach((lead) => processLead(lead));
 
-                        const assistantOverrides = {
-                            variableValues: {
-                                user_firstname: lead[0],
-                                user_lastname: lead[1],
-                                user_email: lead[3],
-                                user_country: lead[4],
-                            },
-                        };
-
-                        try {
-                            const result = await makeCall(phoneNumberId, customerData, assistantOverrides);
-                            return {
-                                success: true,
-                                lead,
-                                phoneCallProviderId: result.phoneCallProviderId,
-                                callId: result.id,
-                            };
-                        } catch (error) {
-                            console.error(`Error calling ${lead[0]}:`, error.message);
-                            return { success: false, lead, error: error.message };
-                        }
-                    })
-                );
-
-                // Prepare Google Sheets updates
-                const updates = callResults.map((result) => {
-                    const rowIndex = leads.indexOf(result.lead) + 1; // Find the row index
-                    if (result.success) {
-                        return [
-                            { range: `Lead list!F${rowIndex}`, values: ['called'] },
-                            { range: `Lead list!G${rowIndex}`, values: [result.phoneCallProviderId] },
-                            { range: `Lead list!H${rowIndex}`, values: [result.callId] },
-                        ];
-                    } else {
-                        return [
-                            { range: `Lead list!F${rowIndex}`, values: ['error'] },
-                            { range: `Lead list!H${rowIndex}`, values: [result.error] },
-                        ];
-                    }
-                }).flat();
-
-                // Batch update Google Sheets
-                if (updates.length > 0) {
-                    await batchUpdateCells(updates);
-                }
-
-                // Add a delay between batches to avoid rate limits
-                await delay(2000);
-            }
-
-            res.status(200).json({ message: 'Calls processed successfully' });
+            res.status(200).json({ message: 'Initial batch of calls started.' });
         } catch (error) {
-            console.error('Error processing calls:', error);
-            res.status(500).json({ error: 'Failed to process calls', message: error.message });
+            console.error('Error in makeCalls:', error);
+            res.status(500).json({ error: 'Failed to start calls.' });
         }
     } else {
         res.setHeader('Allow', ['POST']);
