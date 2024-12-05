@@ -1,18 +1,10 @@
-import { getLeads, getActivePhoneNumbers, updateLeadInfo } from '../../lib/sheets'; // Import necessary functions
+import { getLeads, getActivePhoneNumbers, batchUpdateCells } from '../../lib/sheets';
 import { makeCall } from '../../lib/vapi';
 
-// Variables to track state
-let ongoingCalls = 0;
-const maxConcurrentCalls = 20;
-let pendingLeads = [];
-let activePhoneNumbers = [];
+let activeCalls = 0; // Tracks the number of active calls
+const maxActiveCalls = 20; // Maximum number of simultaneous calls
 
-// Helper function for delay
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Function to process a lead
-const processLead = async (lead) => {
+const initiateCall = async (lead, activePhoneNumbers, leads) => {
     const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
     const phoneNumberId = activePhoneNumbers[randomIndex];
 
@@ -33,56 +25,59 @@ const processLead = async (lead) => {
 
     try {
         const result = await makeCall(phoneNumberId, customerData, assistantOverrides);
-        const phoneCallProviderId = result.phoneCallProviderId;
-        const callId = result.id;
+        const rowIndex = leads.indexOf(lead) + 1;
 
-        const rowIndex = pendingLeads.indexOf(lead) + 1;
-        await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId);
-
-        console.log(`Call successful for ${customerData.name}`);
+        // Update Google Sheets with success
+        await batchUpdateCells([
+            { range: `Lead list!F${rowIndex}`, values: ['called'] },
+            { range: `Lead list!G${rowIndex}`, values: [result.phoneCallProviderId] },
+            { range: `Lead list!H${rowIndex}`, values: [result.id] },
+        ]);
+        return result;
     } catch (error) {
-        console.error(`Error calling lead ${customerData.name}:`, error.message);
-    } finally {
-        // Reduce the count of ongoing calls and trigger the next one if available
-        ongoingCalls--;
-        triggerNextCall();
+        const rowIndex = leads.indexOf(lead) + 1;
+
+        // Update Google Sheets with error
+        await batchUpdateCells([
+            { range: `Lead list!F${rowIndex}`, values: ['error'] },
+            { range: `Lead list!H${rowIndex}`, values: [error.message] },
+        ]);
+        throw error;
     }
 };
 
-// Function to trigger the next call
-const triggerNextCall = () => {
-    if (pendingLeads.length > 0 && ongoingCalls < maxConcurrentCalls) {
-        const nextLead = pendingLeads.shift(); // Get the next lead from the queue
-        ongoingCalls++;
-        processLead(nextLead);
-    }
-};
-
-// Main API handler
 export default async function handler(req, res) {
     if (req.method === 'POST') {
         try {
-            // Fetch leads and active phone numbers
+            const { numberOfCalls } = req.body;
+
+            if (!Number.isInteger(numberOfCalls) || numberOfCalls <= 0) {
+                return res.status(400).json({ message: 'Please provide a valid number of calls.' });
+            }
+
             const leads = await getLeads();
-            activePhoneNumbers = await getActivePhoneNumbers();
+            const notCalledLeads = leads.filter((lead) => lead[5] === 'not-called');
+            const activePhoneNumbers = await getActivePhoneNumbers();
 
             if (activePhoneNumbers.length === 0) {
                 return res.status(400).json({ message: 'No active phone numbers available.' });
             }
 
-            // Filter leads with "not-called" status
-            pendingLeads = leads.filter((lead) => lead[5] === 'not-called');
+            // Start 20 calls
+            const initialCalls = notCalledLeads.slice(0, maxActiveCalls).map((lead) =>
+                initiateCall(lead, activePhoneNumbers, leads)
+                    .catch((error) => console.error(`Error with lead ${lead[0]}:`, error))
+                    .finally(() => activeCalls--)
+            );
+            activeCalls += initialCalls.length;
 
-            // Start with 20 concurrent calls
-            const initialCalls = pendingLeads.splice(0, maxConcurrentCalls);
-            ongoingCalls = initialCalls.length;
+            // Wait for initial calls to complete
+            await Promise.all(initialCalls);
 
-            initialCalls.forEach((lead) => processLead(lead));
-
-            res.status(200).json({ message: 'Initial batch of calls started.' });
+            res.status(200).json({ message: 'Initial batch of calls processed successfully.' });
         } catch (error) {
-            console.error('Error in makeCalls:', error);
-            res.status(500).json({ error: 'Failed to start calls.' });
+            console.error('Error processing calls:', error);
+            res.status(500).json({ error: 'Failed to process calls', message: error.message });
         }
     } else {
         res.setHeader('Allow', ['POST']);
