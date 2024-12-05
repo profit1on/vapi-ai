@@ -54,82 +54,88 @@ export default async function handler(req, res) {
 
             let totalCallsMade = 0; // Initialize a counter for total calls made
 
-            // Make calls to the specified number of leads or until there are no more leads left
-            for (let i = 0; i < Math.min(numberOfCalls, notCalledLeads.length); i++) {
-                const lead = notCalledLeads[i]; // Select the lead based on the current index
+            // Step 4: Process calls in batches of 5
+            const batches = Math.ceil(Math.min(numberOfCalls, notCalledLeads.length) / 5); // Calculate number of batches
+            for (let batchIndex = 0; batchIndex < batches; batchIndex++) {
+                const batchLeads = notCalledLeads.slice(batchIndex * 5, (batchIndex + 1) * 5); // Get the leads for the current batch
 
-                // Select a random active phone number ID
-                const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
-                const phoneNumberId = activePhoneNumbers[randomIndex]; // Get a random active phone number ID
+                // Create an array of promises to make calls for this batch
+                const batchPromises = batchLeads.map(async (lead) => {
+                    const randomIndex = Math.floor(Math.random() * activePhoneNumbers.length);
+                    const phoneNumberId = activePhoneNumbers[randomIndex]; // Get a random active phone number ID
 
-                const customerData = {
-                    name: lead[0], // Adjust index as per your data structure
-                    number: `+${lead[2]}`, // Assuming lead[2] contains the number without the '+' prefix
-                    extension: lead[6] || "", // If extension is stored in lead[6], adjust accordingly
-                };
+                    const customerData = {
+                        name: lead[0], // Adjust index as per your data structure
+                        number: `+${lead[2]}`, // Assuming lead[2] contains the number without the '+' prefix
+                        extension: lead[6] || "", // If extension is stored in lead[6], adjust accordingly
+                    };
 
-                // Prepare the assistant overrides with dynamic variables
-                const assistantOverrides = {
-                    variableValues: {
-                        user_firstname: lead[0], // Assuming first name is in lead[0]
-                        user_lastname: lead[1], // Assuming last name is in lead[1]
-                        user_email: lead[3], // Assuming email is in lead[3]
-                        user_country: lead[4], // Assuming country is in lead[4]
-                    },
-                };
+                    // Prepare the assistant overrides with dynamic variables
+                    const assistantOverrides = {
+                        variableValues: {
+                            user_firstname: lead[0], // Assuming first name is in lead[0]
+                            user_lastname: lead[1], // Assuming last name is in lead[1]
+                            user_email: lead[3], // Assuming email is in lead[3]
+                            user_country: lead[4], // Assuming country is in lead[4]
+                        },
+                    };
 
-                let callSuccessful = false; // Flag to check if call was successful
-                let attempts = 0; // Initialize attempts counter
+                    let callSuccessful = false; // Flag to check if call was successful
+                    let attempts = 0; // Initialize attempts counter
 
-                while (!callSuccessful && attempts < 3) {
-                    try {
-                        // Make the call with backoff and store the result
-                        const result = await makeRequestWithBackoff(() => makeCall(phoneNumberId, customerData, assistantOverrides));
-                        callResults.push(result);
+                    while (!callSuccessful && attempts < 3) {
+                        try {
+                            // Make the call with backoff and store the result
+                            const result = await makeRequestWithBackoff(() => makeCall(phoneNumberId, customerData, assistantOverrides));
+                            callResults.push(result);
 
-                        // Log the result for debugging purposes
-                        console.log(`Call Result for ${customerData.name}:`, result);
+                            // Log the result for debugging purposes
+                            console.log(`Call Result for ${customerData.name}:`, result);
 
-                        // Increment the total calls made
-                        totalCallsMade++;
+                            // Increment the total calls made
+                            totalCallsMade++;
 
-                        // Get the phoneCallProviderId and callId from the result
-                        const phoneCallProviderId = result.phoneCallProviderId;
-                        const callId = result.id; // Use the ID from the result
+                            // Get the phoneCallProviderId and callId from the result
+                            const phoneCallProviderId = result.phoneCallProviderId;
+                            const callId = result.id; // Use the ID from the result
 
-                        // Check if the result contains the required IDs
-                        if (!phoneCallProviderId || !callId) {
-                            console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
-                            break; // Exit the loop if IDs are missing
-                        }
-
-                        // Update the lead status and call information in Google Sheets
-                        const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
-                        await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
-                        callSuccessful = true; // Mark the call as successful
-
-                    } catch (error) {
-                        console.error(`Error making call for ${customerData.name}:`, error.message);
-                        attempts++; // Increment the attempts counter
-
-                        // Log the specific error response for further investigation
-                        if (error.response) {
-                            console.error('Error response from VAPI:', error.response.data);
-
-                            // Handle the "Bad Request" error specifically for invalid phone numbers
-                            if (error.response.data.error === 'Bad Request' && error.response.data.message.includes('E.164')) {
-                                const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
-                                await updateLeadInfo(rowIndex, 'Bad Request'); // Update lead with "Bad Request" status
+                            // Check if the result contains the required IDs
+                            if (!phoneCallProviderId || !callId) {
+                                console.error(`Missing phoneCallProviderId or callId for ${customerData.name}`);
+                                break; // Exit the loop if IDs are missing
                             }
+
+                            // Update the lead status and call information in Google Sheets
+                            const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
+                            await updateLeadInfo(rowIndex, 'called', phoneCallProviderId, callId); // Pass the status, provider ID, and call ID
+                            callSuccessful = true; // Mark the call as successful
+
+                        } catch (error) {
+                            console.error(`Error making call for ${customerData.name}:`, error.message);
+                            attempts++; // Increment the attempts counter
+
+                            // Log the specific error response for further investigation
+                            if (error.response) {
+                                console.error('Error response from VAPI:', error.response.data);
+
+                                // Handle the "Bad Request" error specifically for invalid phone numbers
+                                if (error.response.data.error === 'Bad Request' && error.response.data.message.includes('E.164')) {
+                                    const rowIndex = leads.indexOf(lead) + 1; // Get the row index (1-based index)
+                                    await updateLeadInfo(rowIndex, 'Bad Request'); // Update lead with "Bad Request" status
+                                }
+                            }
+
+                            // Introduce a delay before retrying the call
+                            await delay(2000); // Adjust the delay time as needed (in milliseconds)
                         }
-
-                        // Introduce a delay before retrying the call
-                        await delay(2000); // Adjust the delay time as needed (in milliseconds)
                     }
-                }
+                });
 
-                // Introduce a delay of 500ms between calls
-                await delay(10); // Adjust the delay time as needed (in milliseconds)
+                // Wait for all calls in this batch to finish
+                await Promise.all(batchPromises);
+
+                // Introduce a delay of 500ms between batches
+                await delay(500); // Adjust the delay time as needed (in milliseconds)
             }
 
             // Log the total number of calls made
